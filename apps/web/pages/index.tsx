@@ -1,279 +1,217 @@
-import { useState, useCallback, FC, useEffect } from "react";
-import { User } from "@/lib/types";
-import { nanoid } from "nanoid";
-import BaseLayout from "@/components/BaseLayout";
-import useSWR from "swr";
+import { useState, useCallback } from "react";
+import { Call, User } from "@/lib/types";
+import { UsersList } from "@/components/UsersList";
+import { RegisterView } from "@/components/RegisterView";
 import { getApiLink } from "@/lib/routing";
-
-type CallStatus = {
-  type: "incoming" | "outgoing";
-  status: "ringing" | "ongoing" | "error";
-  caller: User;
-  receiver: User;
-  errMsg?: string;
-};
+import CallView from "@/components/CallView";
 
 export default function Home() {
+  // user details
   const [user, setUser] = useState<User | null>(null);
+  const [currentCall, setCurrentCall] = useState<Call | null>(null);
+
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [isConnectingSock, setIsConnectingSock] = useState(false);
+  const [socketError, setSocketError] = useState("");
 
-  // registration
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [registerError, setRegisterError] = useState("");
-
-  const register = useCallback((usr: User) => {
+  const connectSocket = useCallback((usr: User) => {
     try {
-      setIsRegistering(true);
+      setIsConnectingSock(true);
       const wsLink = `${process.env.NEXT_PUBLIC_WS_URL}?name=${usr.name}&id=${usr.id}&location=${usr.location}`;
       const sock = new WebSocket(wsLink);
       sock.addEventListener("error", (evt) => {
-        setRegisterError("An error occurred");
+        console.error(evt);
+        setSocketError("Unable to register websocket");
+        setIsConnectingSock(false);
       });
       sock.addEventListener("close", () => {
+        console.log("Socket closed");
         setSocket(null);
+        setIsConnectingSock(false);
       });
       sock.addEventListener("open", () => {
+        console.log("Socket opened");
         setSocket(sock);
-        setUser(usr);
+        setIsConnectingSock(false);
       });
       sock.addEventListener("message", (evt) => {
-        console.log({ msgEvtData: evt.data });
+        console.log("message event");
+        try {
+          const message = JSON.parse(evt.data);
+          console.log({ messageType: message.type });
+          switch (message.type) {
+            case "INCOMING_CALL":
+              setCurrentCall(message.call);
+              break;
+
+            case "ACCEPT_CALL":
+              console.log(message.call);
+              setCurrentCall(message.call);
+              break;
+
+            case "DECLINE_CALL":
+              setCurrentCall(message.call);
+              break;
+
+            case "END_CALL":
+              setCurrentCall(message.call);
+              break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          console.log("Unable to parse message");
+          console.log(evt.data);
+          console.error(error);
+        }
       });
-    } catch (error) {}
-  }, []);
-
-  // call status
-  const [callStatus, setCallStatus] = useState<CallStatus>();
-  const call = useCallback((receiver: User) => {
-    if (!user || !socket) {
-      setCallStatus(undefined);
-      return;
+    } catch (error) {
+      console.error(error);
+      setIsConnectingSock(false);
     }
-
-    setCallStatus({
-      type: "outgoing",
-      caller: user,
-      receiver,
-      status: "ringing",
-    });
-
-    socket.send(
-      JSON.stringify({
-        type: "CALL",
-        receiver,
-      })
-    );
   }, []);
+
+  const call = useCallback(
+    async (receiver: User) => {
+      if (!user || !socket) {
+        setCurrentCall(null);
+        return;
+      }
+
+      try {
+        setCurrentCall({
+          caller: user,
+          id: "random",
+          receiver,
+          status: "DIALLING",
+        });
+
+        const callResponse = await fetch(getApiLink("/calls/start"), {
+          method: "POST",
+          body: JSON.stringify({ callerId: user.id, receiverId: receiver.id }),
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const body = await callResponse.json();
+        if (callResponse.ok) {
+          setCurrentCall(body);
+        } else {
+          throw body.message;
+        }
+      } catch (error: any) {
+        setCurrentCall(
+          (call) =>
+            call && {
+              ...call,
+              status: "ERROR",
+              errMsg: error.message || "Unable to place call",
+            }
+        );
+      }
+    },
+    [socket, user]
+  );
+
+  const answerCall = useCallback(
+    async (answer: "ACCEPT" | "DECLINE") => {
+      try {
+        if (!currentCall) {
+          throw new Error("No call found");
+        }
+
+        const answerResponse = await fetch(getApiLink("/calls/answer"), {
+          method: "POST",
+          body: JSON.stringify({ callId: currentCall.id, answer }),
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const call = await answerResponse.json();
+        if (answerResponse.ok) {
+          setCurrentCall(call);
+        } else {
+          throw call.message;
+        }
+      } catch (error: any) {
+        setCurrentCall(
+          (current) =>
+            current && {
+              ...current,
+              status: "ERROR",
+              errMsg: error.message || "Unable to answer call",
+            }
+        );
+      }
+    },
+    [currentCall]
+  );
+
+  const endCall = useCallback(async () => {
+    try {
+      if (!currentCall) {
+        throw new Error("No call found");
+      }
+
+      const endResponse = await fetch(getApiLink("/calls/end"), {
+        method: "POST",
+        body: JSON.stringify({ callId: currentCall.id, userId: user?.id }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const call = await endResponse.json();
+      if (endResponse.ok) {
+        setCurrentCall(call);
+      } else {
+        throw call.message;
+      }
+    } catch (error: any) {
+      setCurrentCall(
+        (current) =>
+          current && {
+            ...current,
+            status: "ERROR",
+            errMsg: error.message || "Unable to answer call",
+          }
+      );
+    }
+  }, [currentCall, user?.id]);
+
+  const onRegister = useCallback(
+    (user: User) => {
+      setUser(user);
+      connectSocket(user);
+    },
+    [connectSocket]
+  );
 
   if (!user) {
-    return (
-      <RegisterView
-        onRegister={register}
-        isRegistering={isRegistering}
-        registerError={registerError}
-      />
-    );
+    return <RegisterView onRegister={onRegister} />;
   }
 
   if (!socket) {
     return (
-      <BaseLayout>
-        <div>Disconnected</div>
-        <button onClick={() => register(user)}>Reconnect</button>
-      </BaseLayout>
+      <div>
+        <div>{isConnectingSock ? "Connecting socket" : "Disconnected"}</div>
+        {!!socketError && <div>{socketError}</div>}
+        {!isConnectingSock && (
+          <button onClick={() => connectSocket(user)}>Reconnect</button>
+        )}
+      </div>
     );
   }
 
-  if (callStatus?.status === "ringing") {
-    const { receiver, caller } = callStatus;
-    const isIncoming = receiver.id === user.id;
-    const displayed = isIncoming ? caller : receiver;
-
+  if (currentCall) {
     return (
-      <div>
-        <div>{displayed.name}</div>
-        <div>{displayed.location}</div>
-        <div>{isIncoming ? "Incoming call" : "Outgoing call"}</div>
-        <button>End</button>
-      </div>
+      <CallView
+        acceptCall={() => answerCall("ACCEPT")}
+        declineCall={() => answerCall("DECLINE")}
+        endCall={endCall}
+        closeUI={() => setCurrentCall(null)}
+        call={currentCall}
+        me={user}
+      />
     );
   }
 
   return <UsersList me={user} call={call} />;
 }
-
-type GetcodeResponse = {
-  latitude: number;
-  lookupSource: "coordinates";
-  longitude: number;
-  localityLanguageRequested: "en";
-  continent: string;
-  continentCode: string;
-  countryName: string;
-  countryCode: string;
-  city: string;
-  locality: string;
-  postcode: "94043";
-  plusCode: "849VCWC8+JG";
-};
-
-type RegisterProps = {
-  onRegister: (user: User) => void;
-  isRegistering: boolean;
-  registerError?: string;
-};
-
-const RegisterView: FC<RegisterProps> = ({
-  onRegister,
-  isRegistering,
-  registerError,
-}) => {
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-
-  // location
-  const [position, setPosition] = useState<GeolocationPosition>();
-  const [isGettingPos, setIsGettingPos] = useState(false);
-  const [postionError, setPostionError] = useState("");
-
-  void isGettingPos;
-  void postionError;
-
-  // query postion
-  const getPostion = useCallback(() => {
-    if (!navigator.geolocation) {
-      setPostionError("Unable to access location");
-      setLocation("Unknown");
-      return;
-    }
-
-    setIsGettingPos(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPosition(pos);
-        setIsGettingPos(false);
-      },
-      (error) => {
-        setPostionError(error.message);
-        setIsGettingPos(false);
-      }
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!position) return;
-    (async () => {
-      try {
-        const link = `https://api.bigdatacloud.net/data/reverse-geocode-client?longitude=${position.coords.longitude}&latitude=${position.coords.latitude}`;
-        const response = await fetch(link);
-        if (response.ok) {
-          const body = (await response.json()) as GetcodeResponse;
-          if (body) {
-            setLocation(`${body.city} - ${body.countryName}`);
-          }
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    })();
-  }, [position]);
-
-  const [submitError, setSubmitError] = useState("");
-  const onSubmit = () => {
-    if (!name) {
-      setSubmitError("Please enter your name");
-      return;
-    }
-
-    if (!location) {
-      setSubmitError("Please choose your location");
-      return;
-    }
-
-    const id = nanoid();
-    onRegister({
-      name,
-      id,
-      location,
-    });
-  };
-
-  return (
-    <BaseLayout>
-      <div>
-        <div>Enter your name</div>
-        <input
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </div>
-
-      <div>
-        <div>Location</div>
-        {!!location && <div>{location}</div>}
-        <button onClick={() => getPostion()}>Choose location</button>
-      </div>
-
-      {(!!submitError || !!registerError) && (
-        <div style={{ color: "red" }}>{submitError || registerError}</div>
-      )}
-
-      <button onClick={() => onSubmit()}>
-        {isRegistering ? "Registering" : "Register"}
-      </button>
-    </BaseLayout>
-  );
-};
-
-type UserListProps = {
-  me: User;
-  call: (user: User) => void;
-};
-
-const UsersList: FC<UserListProps> = ({ me, call }) => {
-  const {
-    data: users,
-    isLoading,
-    error,
-  } = useSWR<User[]>(getApiLink("/users"), { refreshInterval: 3000 });
-
-  if (isLoading) {
-    return <div>Loading users</div>;
-  }
-
-  if (error && !users?.length) {
-    return (
-      <div>
-        <div>An error occurred</div>
-        <div>{JSON.stringify(error)}</div>
-      </div>
-    );
-  }
-
-  const filteredUsers = users?.filter((u) => u.id !== me.id);
-
-  if (!filteredUsers?.length) {
-    return <div>No online users</div>;
-  }
-
-  return (
-    <div>
-      <div>
-        <div>{me.name} (Me)</div>
-        <div>{me.location}</div>
-      </div>
-
-      <hr style={{ margin: "20px 0px" }} />
-
-      {filteredUsers.map((u) => (
-        <div key={u.id} style={{ marginTop: "20px" }}>
-          <div>{u.name}</div>
-          <div>{u.location}</div>
-          <button onClick={() => call(u)}>Call</button>
-        </div>
-      ))}
-    </div>
-  );
-};

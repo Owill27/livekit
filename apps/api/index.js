@@ -5,6 +5,18 @@ const { AccessToken } = require("livekit-server-sdk");
 const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 
+// mock stores
+const usersMap = new Map();
+let callLogs = [];
+
+const diallingStatus = "DIALLING";
+const ongoingStatus = "ONGOING";
+const endedStatus = "ENDED";
+const declinedStatus = "DECLINED";
+const missedStatus = "MISSED";
+
+const inactiveStatuses = [endedStatus, declinedStatus, missedStatus];
+
 const app = express();
 
 app.use(
@@ -14,9 +26,6 @@ app.use(
     credentials: true,
   })
 );
-
-// store users
-const usersMap = new Map();
 
 app.use(express.json());
 app.use(bodyParser.json());
@@ -55,7 +64,7 @@ app.get("/token", (req, res) => {
   return res.json({ token: at.toJwt() });
 });
 
-app.get("/users", (req, res) => {
+const getConnectedUsers = () => {
   const allUsers = Array.from(usersMap.values());
 
   const connectedUsers = [];
@@ -65,7 +74,160 @@ app.get("/users", (req, res) => {
       connectedUsers.push(user);
     }
   });
+
+  return connectedUsers;
+};
+
+app.get("/users", (req, res) => {
+  const connectedUsers = getConnectedUsers();
   res.json(connectedUsers);
+});
+
+app.post("/calls/start", (req, res) => {
+  const { receiverId, callerId } = req.body;
+
+  const caller = usersMap.get(callerId);
+  const receiver = usersMap.get(receiverId);
+
+  if (!caller) {
+    return res.status(404).json({
+      message: "Caller is offline",
+    });
+  }
+
+  if (!receiver) {
+    return res.status(404).json({
+      message: "Receiver is offline",
+    });
+  }
+
+  const hasOngoingCall = callLogs.some(
+    (c) => c.receiver.id === receiverId && !inactiveStatuses.includes(c.status)
+  );
+
+  if (hasOngoingCall) {
+    return res.status(400).json({
+      message: "Receiver busy",
+    });
+  }
+
+  const newCall = {
+    id: new Date().toISOString(),
+    caller,
+    receiver,
+    status: diallingStatus,
+  };
+
+  receiver.socket.send(
+    JSON.stringify({
+      type: "INCOMING_CALL",
+      call: newCall,
+    })
+  );
+
+  callLogs.push(newCall);
+  res.json(newCall);
+});
+
+app.post("/calls/answer", (req, res) => {
+  const { callId, answer } = req.body;
+
+  let call = callLogs.filter((c) => c.id === callId)[0];
+
+  if (!call) {
+    return res.status(400).json({
+      message: "Call not found",
+    });
+  }
+
+  const caller = usersMap.get(call.caller.id);
+  const receiver = usersMap.get(call.receiver.id);
+
+  if (!caller) {
+    res.status(404).json({ message: "Caller offline" });
+  }
+
+  if (!receiver) {
+    res.status(404).json({ message: "Receiver offline" });
+  }
+
+  switch (answer) {
+    case "ACCEPT":
+      call.status = ongoingStatus;
+      caller.socket.send(
+        JSON.stringify({
+          type: "ACCEPT_CALL",
+          call,
+        })
+      );
+      break;
+
+    case "DECLINE":
+      call.status = declinedStatus;
+      caller.socket.send(
+        JSON.stringify({
+          type: "DECLINE_CALL",
+          call,
+        })
+      );
+
+    default:
+      break;
+  }
+
+  callLogs = callLogs.map((c) => {
+    if (c.id === callId) {
+      return call;
+    } else {
+      return c;
+    }
+  });
+
+  res.json(call);
+});
+
+app.post("/calls/end", (req, res) => {
+  const { callId, userId } = req.body;
+
+  let call = callLogs.filter((c) => c.id === callId)[0];
+
+  if (!call) {
+    return res.status(400).json({
+      message: "Call not found",
+    });
+  }
+
+  const caller = usersMap.get(call.caller.id);
+  const receiver = usersMap.get(call.receiver.id);
+
+  if (!caller) {
+    res.status(404).json({ message: "Caller offline" });
+  }
+
+  if (!receiver) {
+    res.status(404).json({ message: "Receiver offline" });
+  }
+
+  call.status = endedStatus;
+
+  const notifiedParty = caller.id === userId ? receiver : caller;
+
+  notifiedParty.socket.send(
+    JSON.stringify({
+      type: "END_CALL",
+      call,
+    })
+  );
+
+  callLogs = callLogs.map((c) => {
+    if (c.id === callId) {
+      return call;
+    } else {
+      return c;
+    }
+  });
+
+  res.json(call);
 });
 
 const server = require("http").createServer(app);
@@ -102,7 +264,7 @@ wss.on("connection", (clientSocket, req) => {
       case "CALL":
         const callReceiver = usersMap.get(data.receiver.id);
         if (!callReceiver) {
-          clientSocket.emit(
+          clientsocket.send(
             JSON.stringify({
               type: "CALL_ERROR",
               message: "Recepient not found",
@@ -111,7 +273,7 @@ wss.on("connection", (clientSocket, req) => {
           return;
         }
 
-        callReceiver.socket.emit(
+        callReceiver.socket.send(
           JSON.stringify({
             type: "CALL",
             caller: data.caller,
@@ -124,7 +286,7 @@ wss.on("connection", (clientSocket, req) => {
         const caller = usersMap.get(data.caller.id);
         const receiver = usersMap.get(data.receiver.id);
         if (!caller) {
-          clientSocket.emit(
+          clientsocket.send(
             JSON.stringify({
               type: "CALL_ERROR",
               message: "Caller not found",
@@ -133,7 +295,7 @@ wss.on("connection", (clientSocket, req) => {
           return;
         }
 
-        caller.socket.emit(
+        caller.socket.send(
           JSON.stringify({
             type: "ACCEPT_CALL",
             receiver,
@@ -146,7 +308,7 @@ wss.on("connection", (clientSocket, req) => {
         const rcvr = usersMap.get(data.receiver.id);
 
         if (!clr) {
-          clientSocket.emit(
+          clientsocket.send(
             JSON.stringify({
               type: "CALL_ERROR",
               message: "Call declined",
@@ -155,7 +317,7 @@ wss.on("connection", (clientSocket, req) => {
           return;
         }
 
-        caller.socket.emit(
+        caller.socket.send(
           JSON.stringify({
             type: "DECLINE_CALL",
             receiver: rcvr,
