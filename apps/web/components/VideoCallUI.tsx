@@ -7,32 +7,36 @@ import {
   RoomAudioRenderer,
   ControlBar,
 } from "@livekit/components-react";
-import { useEffect, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { Track } from "livekit-client";
-import { nanoid } from "nanoid/non-secure";
 import { getApiLink } from "@/lib/routing";
+import { Call, User } from "@/lib/types";
 
-export default function Page() {
-  // TODO: get user input for room and name
-  const room = "quickstart-room";
+type Props = {
+  call: Call;
+  me: User;
+  onEnded: VoidFunction;
+};
+
+const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
   const [token, setToken] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
-        const id = nanoid();
-        const resp = await fetch(getApiLink(`/token?room=${room}&id=${id}`));
-        // const resp = await fetch(`/api/get-token?room=${room}&username=${id}`);
+        const resp = await fetch(
+          getApiLink(`/token?room=${call.id}&id=${me.id}`)
+        );
         const data = await resp.json();
         setToken(data.token);
       } catch (e) {
         console.error(e);
       }
     })();
-  }, []);
+  }, [call.id, me.id]);
 
   if (token === "") {
-    return <div>Getting token...</div>;
+    return <div>Connecting call...</div>;
   }
 
   return (
@@ -44,6 +48,7 @@ export default function Page() {
       // Use the default LiveKit theme for nice styles.
       data-lk-theme="default"
       style={{ height: "100dvh" }}
+      onEnded={onEnded}
     >
       {/* Your custom component with basic video conferencing functionality. */}
       <MyVideoConference />
@@ -54,7 +59,7 @@ export default function Page() {
       <ControlBar />
     </LiveKitRoom>
   );
-}
+};
 
 function MyVideoConference() {
   // `useTracks` returns all camera and screen share tracks. If a user
@@ -77,3 +82,5 @@ function MyVideoConference() {
     </GridLayout>
   );
 }
+
+export default VideoUI;
