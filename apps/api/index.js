@@ -33,9 +33,13 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/token", (req, res) => {
+  console.log("Request for token");
+
   const url = new URL(`http://www.example.com${req.url}`);
   const room = url.searchParams.get("room");
   const userId = url.searchParams.get("id");
+
+  console.log({ room, userId });
 
   if (!room) {
     return res.status(400).json({ error: 'Missing "room" query parameter' });
@@ -65,6 +69,9 @@ app.get("/token", (req, res) => {
 });
 
 const getConnectedUsers = () => {
+  console.log("Fetching connected users");
+  console.log({ usersMap: Array.from(usersMap.values()) });
+
   const allUsers = Array.from(usersMap.values());
 
   const connectedUsers = [];
@@ -75,16 +82,21 @@ const getConnectedUsers = () => {
     }
   });
 
+  console.log({ connectedUsers });
   return connectedUsers;
 };
 
 app.get("/users", (req, res) => {
+  console.log("Request for connected users");
   const connectedUsers = getConnectedUsers();
   res.json(connectedUsers);
 });
 
 app.post("/calls/start", (req, res) => {
+  console.log("Request to start a call");
   const { receiverId, callerId } = req.body;
+
+  console.log({ callerId, receiverId });
 
   const caller = usersMap.get(callerId);
   const receiver = usersMap.get(receiverId);
@@ -234,6 +246,7 @@ const server = require("http").createServer(app);
 const wss = new WebSocket.Server({ server });
 
 wss.on("connection", (clientSocket, req) => {
+  console.log("Got a websocket connection");
   // Event for handling messages
 
   const url = new URL(`http://example.com${req.url}`);
@@ -241,7 +254,10 @@ wss.on("connection", (clientSocket, req) => {
   const name = url.searchParams.get("name");
   const location = url.searchParams.get("location");
 
+  console.log({ id, name, location });
+
   if (!id || !name || !location) {
+    console.log("Missing required params, closing connection");
     clientSocket.close(
       undefined,
       JSON.stringify({ message: "Missing required params" })
@@ -249,6 +265,7 @@ wss.on("connection", (clientSocket, req) => {
     return;
   }
 
+  console.log("Adding to users map");
   usersMap.set(id, {
     name,
     id,
@@ -258,7 +275,10 @@ wss.on("connection", (clientSocket, req) => {
   });
 
   clientSocket.on("message", async (data) => {
+    console.log("Received a websocket message");
     const { type } = JSON.parse(data);
+
+    console.log({ messageType: type });
 
     switch (type) {
       case "CALL":
@@ -336,7 +356,9 @@ wss.on("connection", (clientSocket, req) => {
   });
 
   // Event for user disconnect
-  clientSocket.on("close", () => {
+  clientSocket.on("close", (evt) => {
+    console.log("Client socket closed");
+    console.log(evt);
     usersMap.delete(id);
   });
 });
