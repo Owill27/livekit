@@ -271,7 +271,6 @@ wss.on("connection", (clientSocket, req) => {
     id,
     location,
     socket: clientSocket,
-    status: "FREE",
   });
 
   clientSocket.on("message", async (data) => {
