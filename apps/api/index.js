@@ -274,80 +274,89 @@ wss.on("connection", (clientSocket, req) => {
       "Received a websocket message, setting status to alive and handling"
     );
     clientSocket.isAlive = true;
-    const { type } = JSON.parse(data);
-    console.log({ messageType: type });
+    try {
+      const { type } = JSON.parse(data);
+      console.log({ messageType: type });
 
-    switch (type) {
-      case "PONG":
-        clientSocket.isAlive = true;
-        return;
+      switch (type) {
+        case "PONG":
+          clientSocket.isAlive = true;
+          return;
 
-      case "CALL":
-        const callReceiver = usersMap.get(data.receiver.id);
-        if (!callReceiver) {
-          clientsocket.send(
+        case "CALL":
+          const callReceiver = usersMap.get(data.receiver.id);
+          if (!callReceiver) {
+            clientsocket.send(
+              JSON.stringify({
+                type: "CALL_ERROR",
+                message: "Recepient not found",
+              })
+            );
+            return;
+          }
+
+          callReceiver.socket.send(
             JSON.stringify({
-              type: "CALL_ERROR",
-              message: "Recepient not found",
+              type: "CALL",
+              caller: data.caller,
             })
           );
-          return;
-        }
 
-        callReceiver.socket.send(
-          JSON.stringify({
-            type: "CALL",
-            caller: data.caller,
-          })
-        );
+          break;
 
-        break;
+        case "ACCEPT_CALL":
+          const caller = usersMap.get(data.caller.id);
+          const receiver = usersMap.get(data.receiver.id);
+          if (!caller) {
+            clientsocket.send(
+              JSON.stringify({
+                type: "CALL_ERROR",
+                message: "Caller not found",
+              })
+            );
+            return;
+          }
 
-      case "ACCEPT_CALL":
-        const caller = usersMap.get(data.caller.id);
-        const receiver = usersMap.get(data.receiver.id);
-        if (!caller) {
-          clientsocket.send(
+          caller.socket.send(
             JSON.stringify({
-              type: "CALL_ERROR",
-              message: "Caller not found",
+              type: "ACCEPT_CALL",
+              receiver,
             })
           );
-          return;
-        }
+          break;
 
-        caller.socket.send(
-          JSON.stringify({
-            type: "ACCEPT_CALL",
-            receiver,
-          })
-        );
-        break;
+        case "DECLINE_CALL":
+          const clr = usersMap.get(data.caller.id);
+          const rcvr = usersMap.get(data.receiver.id);
 
-      case "DECLINE_CALL":
-        const clr = usersMap.get(data.caller.id);
-        const rcvr = usersMap.get(data.receiver.id);
+          if (!clr) {
+            clientsocket.send(
+              JSON.stringify({
+                type: "CALL_ERROR",
+                message: "Call declined",
+              })
+            );
+            return;
+          }
 
-        if (!clr) {
-          clientsocket.send(
+          caller.socket.send(
             JSON.stringify({
-              type: "CALL_ERROR",
-              message: "Call declined",
+              type: "DECLINE_CALL",
+              receiver: rcvr,
             })
           );
-          return;
-        }
+          break;
 
-        caller.socket.send(
-          JSON.stringify({
-            type: "DECLINE_CALL",
-            receiver: rcvr,
-          })
-        );
-        break;
-
-      default:
-        break;
+        default:
+          clientSocket.send(
+            JSON.stringify({ type: "ERROR", message: "Invalid message type" })
+          );
+          break;
+      }
+    } catch (error) {
+      clientSocket.send(
+        JSON.stringify({ type: "ERROR", message: "Invalid json" })
+      );
     }
   });
 
