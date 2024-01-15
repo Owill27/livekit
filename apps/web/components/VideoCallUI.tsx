@@ -9,24 +9,25 @@ import {
 import { FC, useEffect, useState, ReactElement } from "react";
 import { Track } from "livekit-client";
 import { getApiLink } from "@/lib/routing";
-import { Call, User } from "@/lib/types";
+import { User } from "@/lib/types";
 import { VideoRenderer } from "./calls/VideoRenderer";
 import styles from "./video-call-ui.module.css";
 
 type Props = {
-  call: Call;
   me: User;
+  callId: string;
+  remoteLocation: string;
   onEnded: VoidFunction;
 };
 
-const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
+const VideoUI: FC<Props> = ({ callId, me, remoteLocation, onEnded }) => {
   const [token, setToken] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
         const resp = await fetch(
-          getApiLink(`/token?room=${call.id}&id=${me.id}`)
+          getApiLink(`/token?room=${callId}&id=${me.id}`)
         );
         const data = await resp.json();
         setToken(data.token);
@@ -34,7 +35,7 @@ const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
         console.error(e);
       }
     })();
-  }, [call.id, me.id]);
+  }, [callId, me.id]);
 
   if (token === "") {
     return <div>Connecting call...</div>;
@@ -51,13 +52,19 @@ const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
       style={{ height: "100vh", width: "100vw" }}
       onEnded={onEnded}
     >
-      <MyVideoConference endCall={onEnded} />
+      <MyVideoConference remoteLocation={remoteLocation} endCall={onEnded} />
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
 };
 
-function MyVideoConference({ endCall }: { endCall: VoidFunction }) {
+function MyVideoConference({
+  remoteLocation,
+  endCall,
+}: {
+  remoteLocation: string;
+  endCall: VoidFunction;
+}) {
   const localParticipant = useLocalParticipant();
   const localVideoTrack = localParticipant.cameraTrack?.track;
 
@@ -105,6 +112,7 @@ function MyVideoConference({ endCall }: { endCall: VoidFunction }) {
       {remoteVideoElement}
       {localVideoElement}
       <div className={styles.controls}>
+        <p>{remoteLocation}</p>
         <button onClick={onEnd} className={styles.redButton}>
           End
         </button>

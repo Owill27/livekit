@@ -82,7 +82,14 @@ const CallView: FC<Props> = ({
   }
 
   if (call.status === "ONGOING") {
-    return <VideoUI call={call} me={me} onEnded={endCall} />;
+    return (
+      <VideoUI
+        callId={call.id}
+        me={me}
+        remoteLocation={displayedUser.location}
+        onEnded={endCall}
+      />
+    );
   }
 
   return null;

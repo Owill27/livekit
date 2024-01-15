@@ -76,7 +76,6 @@ export default function Home() {
                 break;
 
               case "PING":
-                console.log("Got a ping event, sending back a pong");
                 sock.send(JSON.stringify({ type: "PONG" }));
                 break;
 
