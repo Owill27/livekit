@@ -72,6 +72,7 @@ export default function Home() {
 
               case "END_CALL":
                 setCurrentCall(message.call);
+                window.location.reload();
                 break;
 
               case "PING":
@@ -185,6 +186,7 @@ export default function Home() {
       const call = await endResponse.json();
       if (endResponse.ok) {
         setCurrentCall(call);
+        window.location.reload();
       } else {
         throw call.message;
       }

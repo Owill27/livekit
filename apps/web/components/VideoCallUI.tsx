@@ -2,7 +2,6 @@ import "@livekit/components-styles";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  ControlBar,
   useLocalParticipant,
   useRemoteParticipants,
   useDisconnectButton,
@@ -49,16 +48,11 @@ const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
       // Use the default LiveKit theme for nice styles.
       data-lk-theme="default"
-      style={{ height: "100dvh" }}
+      style={{ height: "100vh", width: "100vw" }}
       onEnded={onEnded}
     >
-      {/* Your custom component with basic video conferencing functionality. */}
       <MyVideoConference endCall={onEnded} />
-      {/* The RoomAudioRenderer takes care of room-wide audio for you. */}
       <RoomAudioRenderer />
-      {/* Controls for the user to start/stop audio, video, and screen 
-      share tracks and to leave the room. */}
-      <ControlBar />
     </LiveKitRoom>
   );
 };
