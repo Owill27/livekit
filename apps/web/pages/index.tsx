@@ -14,6 +14,7 @@ export default function Home() {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnectingSock, setIsConnectingSock] = useState(false);
   const [socketError, setSocketError] = useState("");
+  const [heartbeatTimeount, setHeartbeatTimeount] = useState<NodeJS.Timeout>();
 
   const connectSocket = useCallback(
     (usr: User) => {
@@ -33,6 +34,9 @@ export default function Home() {
           const now = new Date();
           setSocket(null);
           setIsConnectingSock(false);
+          if (heartbeatTimeount) {
+            clearTimeout(heartbeatTimeount);
+          }
 
           console.log(`Connected at ${connectedAt}`);
           console.log(`Disconnected at ${now}`);
@@ -51,11 +55,14 @@ export default function Home() {
           setIsConnectingSock(false);
 
           // add a heartbeat every 99 seconds
-          setInterval(() => {
+          const timeout = setInterval(() => {
             console.log("Sending heartbeat");
             sock.send(JSON.stringify({ type: "HEARTBEAT" }));
           }, 29000);
+
+          setHeartbeatTimeount(timeout);
         });
+
         sock.addEventListener("message", (evt) => {
           console.log("message event");
           try {
@@ -93,7 +100,7 @@ export default function Home() {
         setIsConnectingSock(false);
       }
     },
-    [connectedAt]
+    [connectedAt, heartbeatTimeount]
   );
 
   const call = useCallback(
