@@ -1,4 +1,5 @@
 .turbo
 node_modules
 apps/bin/livekit-server.exe
-####
+apps/api/.env
+apps/api/.env
