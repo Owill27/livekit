@@ -274,6 +274,7 @@ wss.on("connection", (clientSocket, req) => {
       "Received a websocket message, setting status to alive and handling"
     );
     clientSocket.isAlive = true;
+    console.log(data);
     try {
       const { type } = JSON.parse(data);
       console.log({ messageType: type });
@@ -354,6 +355,7 @@ wss.on("connection", (clientSocket, req) => {
           break;
       }
     } catch (error) {
+      console.error(error);
       clientSocket.send(
         JSON.stringify({ type: "ERROR", message: "Invalid json" })
       );
