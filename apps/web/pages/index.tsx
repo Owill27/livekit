@@ -49,6 +49,12 @@ export default function Home() {
           console.log("Socket opened");
           setSocket(sock);
           setIsConnectingSock(false);
+
+          // add a heartbeat every 99 seconds
+          setInterval(() => {
+            console.log("Sending heartbeat");
+            sock.send(JSON.stringify({ type: "HEARTBEAT" }));
+          }, 29000);
         });
         sock.addEventListener("message", (evt) => {
           console.log("message event");
