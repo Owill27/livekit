@@ -10,7 +10,6 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [currentCall, setCurrentCall] = useState<Call | null>(null);
   const [connectedAt, setConnectedAt] = useState<Date>();
-  const [disconnectedAt, setDisconnectedAt] = useState<Date>();
 
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnectingSock, setIsConnectingSock] = useState(false);
@@ -32,12 +31,11 @@ export default function Home() {
         sock.addEventListener("close", () => {
           console.log("Socket closed");
           const now = new Date();
-          setDisconnectedAt(now);
           setSocket(null);
           setIsConnectingSock(false);
 
           console.log(`Connected at ${connectedAt}`);
-          console.log(`Disconnected at ${disconnectedAt}`);
+          console.log(`Disconnected at ${now}`);
           console.log(
             `Connection duration: ${
               ((connectedAt?.valueOf() || 0) - now.valueOf()) / 1000
@@ -45,7 +43,9 @@ export default function Home() {
           );
         });
         sock.addEventListener("open", () => {
-          setConnectedAt(new Date());
+          const now = new Date();
+          console.log(`Connected at ${now}`);
+          setConnectedAt(now);
           console.log("Socket opened");
           setSocket(sock);
           setIsConnectingSock(false);
@@ -87,7 +87,7 @@ export default function Home() {
         setIsConnectingSock(false);
       }
     },
-    [connectedAt, disconnectedAt]
+    [connectedAt]
   );
 
   const call = useCallback(
