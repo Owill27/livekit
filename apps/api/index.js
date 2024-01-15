@@ -70,8 +70,6 @@ app.get("/token", (req, res) => {
 
 const getConnectedUsers = () => {
   console.log("Fetching connected users");
-  console.log({ usersMap: Array.from(usersMap.values()) });
-
   const allUsers = Array.from(usersMap.values());
 
   const connectedUsers = [];
@@ -81,13 +79,10 @@ const getConnectedUsers = () => {
       connectedUsers.push(user);
     }
   });
-
-  console.log({ connectedUsers });
   return connectedUsers;
 };
 
 app.get("/users", (req, res) => {
-  console.log("Request for connected users");
   const connectedUsers = getConnectedUsers();
   res.json(connectedUsers);
 });
@@ -273,13 +268,20 @@ wss.on("connection", (clientSocket, req) => {
     socket: clientSocket,
   });
 
+  clientSocket.isAlive = true;
   clientSocket.on("message", async (data) => {
-    console.log("Received a websocket message");
+    console.log(
+      "Received a websocket message, setting status to alive and handling"
+    );
+    clientSocket.isAlive = true;
     const { type } = JSON.parse(data);
-
     console.log({ messageType: type });
 
     switch (type) {
+      case "PONG":
+        clientSocket.isAlive = true;
+        return;
+
       case "CALL":
         const callReceiver = usersMap.get(data.receiver.id);
         if (!callReceiver) {
@@ -361,6 +363,20 @@ wss.on("connection", (clientSocket, req) => {
     usersMap.delete(id);
   });
 });
+
+setInterval(function ping() {
+  console.log("Runnint ping function");
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) {
+      console.log("Terminating dead connection");
+      return ws.terminate();
+    }
+
+    ws.isAlive = false;
+    console.log("Sending ping event");
+    ws.send(JSON.stringify({ type: "PING" }));
+  });
+}, 29000);
 
 const PORT = process.env.PORT || 4002;
 server.listen(PORT, () => {
