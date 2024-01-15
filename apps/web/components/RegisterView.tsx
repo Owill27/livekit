@@ -2,6 +2,7 @@ import { useState, useCallback, FC, useEffect } from "react";
 import { User } from "@/lib/types";
 import { nanoid } from "nanoid";
 import BaseLayout from "@/components/BaseLayout";
+import styles from "./register.module.css";
 
 export type GetcodeResponse = {
   latitude: number;
@@ -53,6 +54,7 @@ export const RegisterView: FC<RegisterProps> = ({ onRegister }) => {
       (error) => {
         setPostionError(error.message);
         setIsGettingPos(false);
+        setLocation("Unknown");
       }
     );
   }, []);
@@ -101,24 +103,30 @@ export const RegisterView: FC<RegisterProps> = ({ onRegister }) => {
 
   return (
     <BaseLayout>
-      <div>
-        <div>Enter your name</div>
-        <input
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      <div className={styles.container}>
+        <div className={styles.heading}>Register</div>
+
+        <div>
+          <div className={styles.label}>Enter your name</div>
+          <input
+            placeholder="Enter your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div className={styles.label}>Location</div>
+          <div className={styles.location}>
+            <div>{location || "No location chosen"}</div>
+            <button onClick={() => getPostion()}>Choose location</button>
+          </div>
+        </div>
+
+        {!!submitError && <div style={{ color: "red" }}>{submitError}</div>}
+
+        <button onClick={() => onSubmit()}>Register</button>
       </div>
-
-      <div>
-        <div>Location</div>
-        {!!location && <div>{location}</div>}
-        <button onClick={() => getPostion()}>Choose location</button>
-      </div>
-
-      {!!submitError && <div style={{ color: "red" }}>{submitError}</div>}
-
-      <button onClick={() => onSubmit()}>Register</button>
     </BaseLayout>
   );
 };

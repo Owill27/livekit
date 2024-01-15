@@ -1,16 +1,18 @@
 import "@livekit/components-styles";
 import {
   LiveKitRoom,
-  GridLayout,
-  ParticipantTile,
-  useTracks,
   RoomAudioRenderer,
   ControlBar,
+  useLocalParticipant,
+  useRemoteParticipants,
+  useDisconnectButton,
 } from "@livekit/components-react";
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useState, ReactElement } from "react";
 import { Track } from "livekit-client";
 import { getApiLink } from "@/lib/routing";
 import { Call, User } from "@/lib/types";
+import { VideoRenderer } from "./calls/VideoRenderer";
+import styles from "./video-call-ui.module.css";
 
 type Props = {
   call: Call;
@@ -51,7 +53,7 @@ const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
       onEnded={onEnded}
     >
       {/* Your custom component with basic video conferencing functionality. */}
-      <MyVideoConference />
+      <MyVideoConference endCall={onEnded} />
       {/* The RoomAudioRenderer takes care of room-wide audio for you. */}
       <RoomAudioRenderer />
       {/* Controls for the user to start/stop audio, video, and screen 
@@ -61,25 +63,59 @@ const VideoUI: FC<Props> = ({ call, me, onEnded }) => {
   );
 };
 
-function MyVideoConference() {
-  // `useTracks` returns all camera and screen share tracks. If a user
-  // joins without a published camera track, a placeholder track is returned.
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: true },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
-    { onlySubscribed: false }
+function MyVideoConference({ endCall }: { endCall: VoidFunction }) {
+  const localParticipant = useLocalParticipant();
+  const localVideoTrack = localParticipant.cameraTrack?.track;
+
+  const remoteParticipant = useRemoteParticipants()[0];
+  const remoteVideoTrack = remoteParticipant?.getTrack(
+    Track.Source.Camera
+  )?.track;
+
+  let localVideoElement: ReactElement = (
+    <div className={styles.localPlaceholder} />
   );
+  let remoteVideoElement: ReactElement = (
+    <div className={styles.remotePlaceholder} />
+  );
+
+  // end call
+  const { buttonProps } = useDisconnectButton({});
+  function onEnd() {
+    buttonProps.onClick();
+    endCall();
+  }
+
+  if (localVideoTrack) {
+    localVideoElement = (
+      <VideoRenderer
+        className={styles.localVideo}
+        track={localVideoTrack}
+        isLocal={true}
+      />
+    );
+  }
+
+  if (remoteVideoTrack) {
+    remoteVideoElement = (
+      <VideoRenderer
+        className={styles.remoteVideo}
+        track={remoteVideoTrack}
+        isLocal={true}
+      />
+    );
+  }
+
   return (
-    <GridLayout
-      tracks={tracks}
-      style={{ height: "calc(100vh - var(--lk-control-bar-height))" }}
-    >
-      {/* The GridLayout accepts zero or one child. The child is used
-      as a template to render all passed in tracks. */}
-      <ParticipantTile />
-    </GridLayout>
+    <div className={styles.container}>
+      {remoteVideoElement}
+      {localVideoElement}
+      <div className={styles.controls}>
+        <button onClick={onEnd} className={styles.redButton}>
+          End
+        </button>
+      </div>
+    </div>
   );
 }
 

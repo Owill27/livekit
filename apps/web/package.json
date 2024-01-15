@@ -12,6 +12,7 @@
   "dependencies": {
     "@livekit/components-react": "^1.5.1",
     "@livekit/components-styles": "^1.0.8",
+    "@livekit/react-core": "^1.1.0",
     "livekit-client": "^1.15.5",
     "livekit-server-sdk": "^1.2.7",
     "nanoid": "^5.0.4",

@@ -1,7 +1,7 @@
 import { Call, User } from "@/lib/types";
 import { FC } from "react";
 import VideoUI from "./VideoCallUI";
-import { PreJoin } from "@livekit/components-react";
+import DialView from "./calls/DialView";
 
 interface Props {
   call: Call;
@@ -25,26 +25,14 @@ const CallView: FC<Props> = ({
 
   if (call.status === "DIALLING") {
     return (
-      <div>
-        <div>{displayedUser.name}</div>
-        <div>{displayedUser.location}</div>
-        <div>{isIncoming ? "Incoming call" : "Outgoing call"}</div>
-
-        <PreJoin
-          defaults={{ username: me.name }}
-          joinLabel={
-            isIncoming
-              ? `Incoming call from ${displayedUser.name}`
-              : `Calling ${displayedUser.name}`
-          }
-        />
-
-        {isIncoming && <button onClick={acceptCall}>Accept call</button>}
-
-        <button onClick={isIncoming ? declineCall : endCall}>
-          {isIncoming ? "Decline" : "End"}
-        </button>
-      </div>
+      <DialView
+        me={me}
+        displayedUser={displayedUser}
+        acceptCall={acceptCall}
+        declineCall={declineCall}
+        endCall={endCall}
+        isIncoming={isIncoming}
+      />
     );
   }
 
