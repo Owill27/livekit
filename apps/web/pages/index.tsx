@@ -9,68 +9,86 @@ export default function Home() {
   // user details
   const [user, setUser] = useState<User | null>(null);
   const [currentCall, setCurrentCall] = useState<Call | null>(null);
+  const [connectedAt, setConnectedAt] = useState<Date>();
+  const [disconnectedAt, setDisconnectedAt] = useState<Date>();
 
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnectingSock, setIsConnectingSock] = useState(false);
   const [socketError, setSocketError] = useState("");
 
-  const connectSocket = useCallback((usr: User) => {
-    try {
-      setIsConnectingSock(true);
-      const wsLink = `${process.env.NEXT_PUBLIC_WS_URL}?name=${usr.name}&id=${usr.id}&location=${usr.location}`;
-      const sock = new WebSocket(wsLink);
-      sock.addEventListener("error", (evt) => {
-        console.error(evt);
-        setSocketError("Unable to register websocket");
-        setIsConnectingSock(false);
-      });
-      sock.addEventListener("close", () => {
-        console.log("Socket closed");
-        setSocket(null);
-        setIsConnectingSock(false);
-      });
-      sock.addEventListener("open", () => {
-        console.log("Socket opened");
-        setSocket(sock);
-        setIsConnectingSock(false);
-      });
-      sock.addEventListener("message", (evt) => {
-        console.log("message event");
-        try {
-          const message = JSON.parse(evt.data);
-          console.log({ messageType: message.type });
-          switch (message.type) {
-            case "INCOMING_CALL":
-              setCurrentCall(message.call);
-              break;
+  const connectSocket = useCallback(
+    (usr: User) => {
+      console.log("Connecting socket");
+      try {
+        setIsConnectingSock(true);
+        const wsLink = `${process.env.NEXT_PUBLIC_WS_URL}?name=${usr.name}&id=${usr.id}&location=${usr.location}`;
 
-            case "ACCEPT_CALL":
-              console.log(message.call);
-              setCurrentCall(message.call);
-              break;
+        const sock = new WebSocket(wsLink);
+        sock.addEventListener("error", (evt) => {
+          console.error(evt);
+          setSocketError("Unable to register websocket");
+          setIsConnectingSock(false);
+        });
+        sock.addEventListener("close", () => {
+          console.log("Socket closed");
+          const now = new Date();
+          setDisconnectedAt(now);
+          setSocket(null);
+          setIsConnectingSock(false);
 
-            case "DECLINE_CALL":
-              setCurrentCall(message.call);
-              break;
+          console.log(`Connected at ${connectedAt}`);
+          console.log(`Disconnected at ${disconnectedAt}`);
+          console.log(
+            `Connection duration: ${
+              ((connectedAt?.valueOf() || 0) - now.valueOf()) / 1000
+            } seconds`
+          );
+        });
+        sock.addEventListener("open", () => {
+          setConnectedAt(new Date());
+          console.log("Socket opened");
+          setSocket(sock);
+          setIsConnectingSock(false);
+        });
+        sock.addEventListener("message", (evt) => {
+          console.log("message event");
+          try {
+            const message = JSON.parse(evt.data);
+            console.log({ messageType: message.type });
+            switch (message.type) {
+              case "INCOMING_CALL":
+                setCurrentCall(message.call);
+                break;
 
-            case "END_CALL":
-              setCurrentCall(message.call);
-              break;
+              case "ACCEPT_CALL":
+                console.log(message.call);
+                setCurrentCall(message.call);
+                break;
 
-            default:
-              break;
+              case "DECLINE_CALL":
+                setCurrentCall(message.call);
+                break;
+
+              case "END_CALL":
+                setCurrentCall(message.call);
+                break;
+
+              default:
+                break;
+            }
+          } catch (error) {
+            console.log("Unable to parse message");
+            console.log(evt.data);
+            console.error(error);
           }
-        } catch (error) {
-          console.log("Unable to parse message");
-          console.log(evt.data);
-          console.error(error);
-        }
-      });
-    } catch (error) {
-      console.error(error);
-      setIsConnectingSock(false);
-    }
-  }, []);
+        });
+      } catch (error) {
+        console.error(error);
+        setIsConnectingSock(false);
+      }
+    },
+    [connectedAt, disconnectedAt]
+  );
 
   const call = useCallback(
     async (receiver: User) => {
