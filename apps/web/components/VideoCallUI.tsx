@@ -2,15 +2,15 @@ import "@livekit/components-styles";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  useLocalParticipant,
-  useRemoteParticipants,
   useDisconnectButton,
+  VideoTrack,
+  useTracks,
+  TrackReference,
 } from "@livekit/components-react";
-import { FC, useEffect, useState, ReactElement } from "react";
+import { FC, useEffect, useState } from "react";
 import { Track } from "livekit-client";
 import { getApiLink } from "@/lib/routing";
 import { User } from "@/lib/types";
-import { VideoRenderer } from "./calls/VideoRenderer";
 import styles from "./video-call-ui.module.css";
 
 type Props = {
@@ -65,20 +65,13 @@ function MyVideoConference({
   remoteLocation: string;
   endCall: VoidFunction;
 }) {
-  const localParticipant = useLocalParticipant();
-  const localVideoTrack = localParticipant.cameraTrack?.track;
-
-  const remoteParticipant = useRemoteParticipants()[0];
-  const remoteVideoTrack = remoteParticipant?.getTrack(
-    Track.Source.Camera
-  )?.track;
-
-  let localVideoElement: ReactElement = (
-    <div className={styles.localPlaceholder} />
-  );
-  let remoteVideoElement: ReactElement = (
-    <div className={styles.remotePlaceholder} />
-  );
+  const tracks = useTracks([Track.Source.Camera]);
+  const localTrack: TrackReference | undefined = tracks.filter(
+    (t) => t.participant.isLocal
+  )[0];
+  const remoteTrack: TrackReference | undefined = tracks.filter(
+    (t) => !t.participant.isLocal
+  )[0];
 
   // end call
   const { buttonProps } = useDisconnectButton({});
@@ -87,30 +80,14 @@ function MyVideoConference({
     endCall();
   }
 
-  if (localVideoTrack) {
-    localVideoElement = (
-      <VideoRenderer
-        className={styles.localVideo}
-        track={localVideoTrack}
-        isLocal={true}
-      />
-    );
-  }
-
-  if (remoteVideoTrack) {
-    remoteVideoElement = (
-      <VideoRenderer
-        className={styles.remoteVideo}
-        track={remoteVideoTrack}
-        isLocal={true}
-      />
-    );
-  }
-
   return (
     <div className={styles.container}>
-      {remoteVideoElement}
-      {localVideoElement}
+      {!!remoteTrack && (
+        <VideoTrack trackRef={remoteTrack} className={styles.remoteVideo} />
+      )}
+      {!!localTrack && (
+        <VideoTrack trackRef={localTrack} className={styles.localVideo} />
+      )}
       <div className={styles.controls}>
         <p>{remoteLocation}</p>
         <button onClick={onEnd} className={styles.redButton}>
